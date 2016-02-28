@@ -17,9 +17,9 @@ class Trace(object):
 	def __init__(self, filename = None):
 		self.trace = []
 		self.filename = filename
-		self.__loadfile()
+		self.__load_trace()
 
-	def __loadfile(self):
+	def __load_trace(self):
 		try:
 			with open(self.filename, "rb") as trace:
 				for line in trace:
@@ -33,7 +33,9 @@ class Trace(object):
 
 				#for i in range(len(self.trace)):
 				#	print self.trace[i]
+
 		except IOError as error:
+			print '====== ERROR ====='
 			print "Error opening file", error.filename
 			print error.message
 			sys.exit()
