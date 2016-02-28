@@ -1,0 +1,4 @@
+blockSize			= 8
+cacheSize			= 64
+assoc				= 8
+replacementPolicy	= LRU 	#LRU,FIFO,Random
