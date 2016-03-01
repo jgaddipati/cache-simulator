@@ -14,9 +14,12 @@ def main(argv):
 		print "Usage:"
 		print "$ python cache-sim.py <trace_file_name>"
 		sys.exit()
-	print "Starting...."
+
+	print "Starting simulation..."
 	cache = Cache('config')
-	trace = Trace(argv[1])
+	trace = Trace(argv[0])
+	cache.run(trace.trace)
+	cache.print_stats()
 
 
 if __name__ == '__main__':
