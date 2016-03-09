@@ -10,14 +10,22 @@ Cache is arranged as a list of cache sets.
 Each cache set is a list of cache_node
 dictionaries. The number of cache_nodes
 depend on associativity of the cache.
+
 '''
 
 import sys
 import math
 from random import randint
 
-replace_pol = {'Random' : 1, 'LRU' : 2, 'FIFO' : 3}
-cache_node = {'tag' : None, 'rp_crit' : 0}
+replace_pol = {'Random' : 1,
+			   'LRU'    : 2,	# Least Recently Used
+			   'FIFO'   : 3,	# First In First Out
+			   'LFU'    : 4}	# Least Frequently Used
+
+cache_node = {'tag'     : None,
+			  'rp_crit' : 0,
+			  'valid'   : 0}
+
 
 class Cache(object):
 	def __init__(self, filename = None):
@@ -133,7 +141,7 @@ class Cache(object):
 		# there will be 'assoc' number of tags associated at that index
 		for line in range(self.assoc):
 			if self.__cache[index][line]['tag'] == tag:
-				self.__update_rp_crit(self.__cache[index], line)
+				self.__update_replace_crit(self.__cache[index], line)
 				return True
 		return False
 
@@ -145,6 +153,7 @@ class Cache(object):
 			# Random
 			random_line = randint(0, self.assoc - 1)
 			cache_set[random_line]['tag'] = tag
+			self.__init_replace_crit(cache_set, random_line)
 
 		elif self.rp_policy == 2:
 			# LRU -
@@ -180,9 +189,26 @@ class Cache(object):
 						self.__init_replace_crit(cache_set, i)
 						break
 
+		elif self.rp_policy == 4:
+			# LFU - Least Frequently Used
+			# get the count of accesses of all the tags
+			access_cnt = []
+			for i in range(len(self.assoc)):
+				if cache_set[i]['tag']:
+					access_cnt.append(cache_set['rp_crit'])
+
+			# replace a line that is least frequently accessed
+			lfu_crit = min(access_cnt)
+			for i in range(len(self.assoc)):
+				if cache_set[i]['rp_crit'] == lfu_crit:
+					cache_set[i]['tag'] = tag
+					# update replacement criteria since this is a new tag
+					self.__init_replace_crit(cache_set, i)
+					break
+
 		else:
 			pass
-		# TODO add other policies
+		# TODO can add other policies
 
 
 	def __init_replace_crit(self, cache_set, line):
@@ -214,28 +240,46 @@ class Cache(object):
 			else:
 				cache_set[line]['rp_crit'] = 1
 
+		elif self.rp_policy == 4:
+			# LFU - Least Frequently Used
+			# since this a new line, init to 0
+			cache_set[line]['rp_crit'] = 0
+
 		else:
 			pass
-		# TODO add other policies
+		# TODO can add other policies
 
 
-	def __update_rp_crit(self, cache_set, line):
+	def __update_replace_crit(self, cache_set, line):
 		if self.rp_policy == 1:
 			# Random - Nothing to do
 			pass
 
 		elif self.rp_policy == 2:
 			# LRU - touch the block
+			lru_age = 0
 			for i in range(self.assoc):
 				if i == line:
+					lru_age = cache_set[i]['rp_crit']
 					cache_set[i]['rp_crit'] = 0
+					break
+
+			# increment only those age which are less than that of the touched block
+			for i in range(self.assoc):
+				if i == line:
+					continue
 				else:
-					if cache_set[i]['tag']:
+					if (cache_set[i]['tag']) && (cache_set[i]['rp_crit'] < lru_age):
 						cache_set[i]['rp_crit'] += 1
 
 		elif self.rp_policy == 3:
 			# FIFO - Nothing to do
 			pass
+
+		elif self.rp_policy == 4:
+			# LFU - Least Frequently Used
+			# line is accessed, increment criteria
+			cache_set[line]['rp_crit'] += 1
 
 		else:
 			pass
