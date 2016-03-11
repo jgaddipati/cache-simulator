@@ -2,7 +2,6 @@
 
 '''
 Author: Jagadeesh Gaddipati
-SID: 861196271
 Email: jgadd001@ucr.edu
 '''
 import sys
