@@ -5,10 +5,8 @@ Author: Jagadeesh Gaddipati
 Email: jgadd001@ucr.edu
 
 Notes:
-Cache is arranged as a list of cache sets.
-Each cache set is a list of cache_node
-dictionaries. The number of cache_nodes
-depend on associativity of the cache.
+Cache is arranged as a list of cache sets. Each cache set is a list of cache_node
+dictionaries. The number of cache sets depend on associativity of the cache.
 
 rp_crit values:
 LRU  - age of cache block, when block is accessed(touched), initialize age to 0 and increment others' ages
