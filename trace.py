@@ -24,11 +24,11 @@ class Trace(object):
 			with open(self.filename, "rb") as trace:
 				for line in trace:
 					words = line.split() # separate words in the line
-					if words[0] == 'LD':
-						temp_node = {'inst' : 'LD', 'addr' : int(words[2], 16)} # reading in hex
+					if words[7] == 'L':
+						temp_node = {'inst' : 'LD', 'addr' : int(words[9], 16)} # reading in hex
 						self.trace.append(temp_node)
-					elif words[0] == 'ST':
-						temp_node = {'inst' : 'ST', 'addr' : int(words[2], 16)} # reading in hex
+					elif words[7] == 'S':
+						temp_node = {'inst' : 'ST', 'addr' : int(words[9], 16)} # reading in hex
 						self.trace.append(temp_node)
 
 				#for i in range(len(self.trace)):

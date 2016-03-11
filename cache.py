@@ -11,6 +11,11 @@ Each cache set is a list of cache_node
 dictionaries. The number of cache_nodes
 depend on associativity of the cache.
 
+rp_crit values:
+LRU  - age of cache block, when block is accessed(touched), initialize age to 0 and increment others' ages
+FIFO - entry index of the cache block (first entered=0, second entered=1, ...)
+LFU  - number of times the cache block is accessed
+
 '''
 
 import sys
@@ -22,9 +27,10 @@ replace_pol = {'Random' : 1,
 			   'FIFO'   : 3,	# First In First Out
 			   'LFU'    : 4}	# Least Frequently Used
 
-cache_node = {'tag'     : None,
-			  'rp_crit' : 0,
-			  'valid'   : 0}
+cache_node = {'tag'     : None,	# cache tag
+			  'rp_crit' : 0,	# replacement criteria
+			  'valid'   : 0,	# valid bit
+			  'dirty'   : 0}	# dirty bit for write policy (Write-back or Write-through)
 
 
 class Cache(object):
@@ -53,6 +59,10 @@ class Cache(object):
 		try:
 			with open(self.config_file, "rb") as config:
 				for line in config:
+					# handle empty lines
+					if line.strip() == '':
+						continue
+
 					words = line.split() # separate words in the line
 					if words[0] == 'blockSize':
 						self.block_size = int(words[2], 0)
@@ -74,6 +84,7 @@ class Cache(object):
 			else:
 				print '====== ERROR ====='
 				print 'Not all required parameters in the config file'
+				print 'Required: blockSize, cacheSize, assoc, replacementPolicy'
 				print 'Exiting...'
 				sys.exit()
 
@@ -104,13 +115,26 @@ class Cache(object):
 			self.nwrite_accesses += 1
 
 		if not self.__find_line(addr):
-			#print "MISS"
 			if inst == 'LD':
 				self.nread_misses += 1
 			else:
 				self.nwrite_misses += 1
 
 			self.__fill_line(addr)
+
+
+	def __find_line(self, addr):
+		tag = self.__get_tag(addr)
+		index = self.__get_index(addr)
+
+		# check the tags at 'index'th location set
+		# there will be 'assoc' number of tags associated at that index
+		for line in range(self.assoc):
+			if self.__cache[index][line]['tag'] == tag:
+				self.__update_replace_crit(self.__cache[index], line)
+				#TODO set dirty bit here if write-back policy
+				return True
+		return False
 
 
 	def __fill_line(self, addr):
@@ -124,35 +148,25 @@ class Cache(object):
 			if self.__cache[index][line]['tag'] == None:
 				replace_req = False
 				self.__cache[index][line]['tag'] = tag
+				self.__cache[index][line]['valid'] = 1
 				# newly added line, set replacement criteria accordingly
 				self.__init_replace_crit(self.__cache[index], line)
 				break
 
-		# all positions are filled, replace a line accordingly
+		# all positions are filled, replace a line according to policy
 		if replace_req:
 			self.__replace_line(tag, index)
 
 
-	def __find_line(self, addr):
-		tag = self.__get_tag(addr)
-		index = self.__get_index(addr)
-
-		# check the tags at 'index'th location set
-		# there will be 'assoc' number of tags associated at that index
-		for line in range(self.assoc):
-			if self.__cache[index][line]['tag'] == tag:
-				self.__update_replace_crit(self.__cache[index], line)
-				return True
-		return False
-
-
 	def __replace_line(self, tag, index):
 		cache_set = self.__cache[index]
+		#TODO update lower level cache if write-back policy
 
 		if self.rp_policy == 1:
 			# Random
 			random_line = randint(0, self.assoc - 1)
 			cache_set[random_line]['tag'] = tag
+			cache_set[random_line]['valid'] = 1
 			self.__init_replace_crit(cache_set, random_line)
 
 		elif self.rp_policy == 2:
@@ -168,6 +182,7 @@ class Cache(object):
 			for line in range(self.assoc):
 				if cache_set[line]['rp_crit'] == lru_crit:
 					cache_set[line]['tag'] = tag
+					cache_set[line]['valid'] = 1
 					# update replacement criteria since this is a new tag
 					self.__init_replace_crit(cache_set, line)
 					break
@@ -175,63 +190,66 @@ class Cache(object):
 		elif self.rp_policy == 3:
 			# FIFO -
 			# decrement all fifo indices
-			for i in range(self.assoc):
-				if cache_set[i]['tag']:
-					cache_set[i]['rp_crit'] -= 1
+			for line in range(self.assoc):
+				if cache_set[line]['tag']:
+					cache_set[line]['rp_crit'] -= 1
 
 			# replace the tag with '0' fifo index since it entered the cache
 			# before all the other tags present
-			for i in range(self.assoc):
-				if cache_set[i]['tag']:
-					if cache_set[i]['rp_crit'] == 0:
-						cache_set[i]['tag'] = tag
+			for line in range(self.assoc):
+				if cache_set[line]['tag']:
+					if cache_set[line]['rp_crit'] == 0:
+						cache_set[line]['tag'] = tag
+						cache_set[line]['valid'] = 1
 						# update replacement criteria since this is a new tag
-						self.__init_replace_crit(cache_set, i)
+						self.__init_replace_crit(cache_set, line)
 						break
 
 		elif self.rp_policy == 4:
-			# LFU - Least Frequently Used
+			# LFU -
 			# get the count of accesses of all the tags
 			access_cnt = []
-			for i in range(len(self.assoc)):
-				if cache_set[i]['tag']:
-					access_cnt.append(cache_set['rp_crit'])
+			for line in range(self.assoc):
+				if cache_set[line]['tag']:
+					access_cnt.append(cache_set[line]['rp_crit'])
 
 			# replace a line that is least frequently accessed
 			lfu_crit = min(access_cnt)
-			for i in range(len(self.assoc)):
-				if cache_set[i]['rp_crit'] == lfu_crit:
-					cache_set[i]['tag'] = tag
+			for line in range(self.assoc):
+				if cache_set[line]['rp_crit'] == lfu_crit:
+					cache_set[line]['tag'] = tag
+					cache_set[line]['valid'] = 1
 					# update replacement criteria since this is a new tag
-					self.__init_replace_crit(cache_set, i)
+					self.__init_replace_crit(cache_set, line)
 					break
 
+		# TODO add other policies here
 		else:
 			pass
-		# TODO can add other policies
 
 
 	def __init_replace_crit(self, cache_set, line):
+
 		if self.rp_policy == 1:
 			# Random - Nothing to do
 			pass
 
 		elif self.rp_policy == 2:
 			# LRU - initialize age to 0, increment others' age
-			for i in range(self.assoc):
-				if i == line:
-					cache_set[i]['rp_crit'] = 0
+			for iter_line in range(self.assoc):
+				if iter_line == line:
+					cache_set[iter_line]['rp_crit'] = 0
 				else:
-					if cache_set[i]['tag']:
-						cache_set[i]['rp_crit'] += 1
+					if cache_set[iter_line]['tag']:
+						cache_set[iter_line]['rp_crit'] += 1
 
 		elif self.rp_policy == 3:
 			# FIFO - set to the next fifo count
 			# gather fifo counts of all tags
 			fifo_cnt = []
-			for i in range(self.assoc):
-				if cache_set[i]['tag']:
-					fifo_cnt.append(cache_set[i]['rp_crit'])
+			for iter_line in range(self.assoc):
+				if cache_set[iter_line]['tag']:
+					fifo_cnt.append(cache_set[iter_line]['rp_crit'])
 
 			# if this is the first to arrive, init to 1
 			# otherwise set to the next fifo count
@@ -245,9 +263,9 @@ class Cache(object):
 			# since this a new line, init to 0
 			cache_set[line]['rp_crit'] = 0
 
+		# TODO add other policies here
 		else:
 			pass
-		# TODO can add other policies
 
 
 	def __update_replace_crit(self, cache_set, line):
@@ -257,20 +275,19 @@ class Cache(object):
 
 		elif self.rp_policy == 2:
 			# LRU - touch the block
-			lru_age = 0
-			for i in range(self.assoc):
-				if i == line:
-					lru_age = cache_set[i]['rp_crit']
-					cache_set[i]['rp_crit'] = 0
+			replaced_age = 0
+			for iter_line in range(self.assoc):
+				if iter_line == line:
+					replaced_age = cache_set[iter_line]['rp_crit']
+					cache_set[iter_line]['rp_crit'] = 0
 					break
 
 			# increment only those age which are less than that of the touched block
-			for i in range(self.assoc):
-				if i == line:
-					continue
-				else:
-					if (cache_set[i]['tag']) && (cache_set[i]['rp_crit'] < lru_age):
-						cache_set[i]['rp_crit'] += 1
+			# in this way, the counters wont get beyond the saturation value
+			for iter_line in range(self.assoc):
+				if iter_line != line:
+					if cache_set[iter_line]['tag'] and (cache_set[iter_line]['rp_crit'] < replaced_age):
+						cache_set[iter_line]['rp_crit'] += 1
 
 		elif self.rp_policy == 3:
 			# FIFO - Nothing to do
@@ -281,9 +298,9 @@ class Cache(object):
 			# line is accessed, increment criteria
 			cache_set[line]['rp_crit'] += 1
 
+		# TODO add other policies here
 		else:
 			pass
-		# TODO add other policies
 
 
 	def __get_tag(self, addr):
@@ -299,7 +316,7 @@ class Cache(object):
 
 
 	def __get_index(self, addr):
-		# idx_bits = log2(n_sets)
+		# idx_bits = log2(n_sets), offset_bits = log2(block_size)
 		idx_offset_bits = int(math.log(self.sets, 2) + math.log(self.block_size, 2))
 
 		# generate mask to remove tag bits
@@ -325,44 +342,46 @@ class Cache(object):
 	===========================================================================
 	'''
 
-
+	"""
 	def run(self, inst_trace):
 		# iterate over the instructions one by one
 		for tr in iter(inst_trace):
 			if tr['inst'] == 'LD' or tr['inst'] == 'ST':
 				self.__do_cache_access(tr['addr'], tr['inst'])
-			'''
-			print
-			for i in range(len(self.__cache)):
-			#	print (self.__cache[i])
-				for j in range(self.assoc):
-					if self.__cache[i][j]['tag'] != None:
-						print '0x' + format(self.__cache[i][j]['tag'], '08X'),
-					else:
-						print None,
-				print
-			'''
+	"""
+
+
+	def run(self, inst_node):
+		self.__do_cache_access(inst_node['addr'], inst_node['inst'])
 
 
 	def print_stats(self):
-		print
-		print "============ Stats ========================="
-		print 'Number of Read Accesses  :', self.nread_accesses
-		print 'Number of Write Accesses :', self.nwrite_accesses
+		hit_time = 1 # (in cycles) can be made configurable through config file
+		miss_latency = 100 # (in cycles)
 
 		n_accesses = self.nwrite_accesses + self.nread_accesses
-		print 'Total Cache Accesses     :', n_accesses
-
-		print 'Number of Read Misses    :', self.nread_misses
-		print 'Number of Write Misses   :', self.nwrite_misses
-
 		n_misses = self.nwrite_misses + self.nread_misses
-		print 'Total Cache Misses       :', n_misses
-
 		miss_rate = float(n_misses) / n_accesses
-		print 'Miss Rate                :', miss_rate
+		amat = hit_time + (miss_rate * miss_latency)
 
-		amat = 1 + (miss_rate * 100)
-		print 'Avg Memory Access Time   :', amat
+		print
+		print "============ Stats ========================="
+		print 'Number of Read Accesses          :', self.nread_accesses
+		print 'Number of Write Accesses         :', self.nwrite_accesses
+		print 'Total Cache Accesses             :', n_accesses
+		print 'Number of Read Misses            :', self.nread_misses
+		print 'Number of Write Misses           :', self.nwrite_misses
+		print 'Total Cache Misses               :', n_misses
+		print 'Miss Rate                        :', miss_rate
+		print 'Avg Memory Access Time(cycles)   :', amat
+		print
 
+
+	def print_config(self):
+		print
+		print "=========== Configuration =================="
+		print 'Cache size           :', self.cache_size
+		print 'Block size           :', self.block_size
+		print 'Associativity        :', self.assoc
+		print 'Replacement criteria :', [key for key, value in replace_pol.iteritems() if value == self.rp_policy]
 		print

@@ -1,4 +1,4 @@
-blockSize			= 8
-cacheSize			= 64
-assoc				= 8
-replacementPolicy	= LRU 	#LRU,FIFO,Random
+blockSize           = 64
+cacheSize           = 65536	#cannot take as 64*1024, have to give calculated value for now
+assoc               = 4
+replacementPolicy   = Random 	#LRU,FIFO,Random,LFU
