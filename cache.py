@@ -12,7 +12,6 @@ rp_crit values:
 LRU  - age of cache block, when block is accessed(touched), initialize age to 0 and increment others' ages
 FIFO - entry index of the cache block (first entered=0, second entered=1, ...)
 LFU  - number of times the cache block is accessed
-
 '''
 
 import sys
@@ -20,14 +19,14 @@ import math
 from random import randint
 
 replace_pol = {'Random' : 1,
-			   'LRU'    : 2,	# Least Recently Used
-			   'FIFO'   : 3,	# First In First Out
-			   'LFU'    : 4}	# Least Frequently Used
+	       'LRU'    : 2,	# Least Recently Used
+	       'FIFO'   : 3,	# First In First Out
+	       'LFU'    : 4}	# Least Frequently Used
 
 cache_node = {'tag'     : None,	# cache tag
-			  'rp_crit' : 0,	# replacement criteria
-			  'valid'   : 0,	# valid bit
-			  'dirty'   : 0}	# dirty bit for write policy (Write-back or Write-through)
+	      'rp_crit' : 0,	# replacement criteria
+	      'valid'   : 0,	# valid bit
+	      'dirty'   : 0}	# dirty bit for write policy (Write-back or Write-through)
 
 
 class Cache(object):
