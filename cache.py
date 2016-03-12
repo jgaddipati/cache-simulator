@@ -55,7 +55,7 @@ class Cache(object):
 		try:
 			with open(self.config_file, "rb") as config:
 				for line in config:
-					# handle empty lines
+					# handle empty lines in the config file
 					if line.strip() == '':
 						continue
 
@@ -115,6 +115,8 @@ class Cache(object):
 				self.nread_misses += 1
 			else:
 				self.nwrite_misses += 1
+				#TODO if write-through policy, also write to lower level
+				#TODO if write-back policy, only write to this cache, write to lower level on replace
 
 			self.__fill_line(addr)
 
@@ -126,9 +128,9 @@ class Cache(object):
 		# check the tags at 'index'th location set
 		# there will be 'assoc' number of tags associated at that index
 		for line in range(self.assoc):
-			if self.__cache[index][line]['tag'] == tag:
+			if self.__cache[index][line]['valid'] and (self.__cache[index][line]['tag'] == tag):
 				self.__update_replace_crit(self.__cache[index], line)
-				#TODO set dirty bit here if write-back policy
+				#TODO set dirty bit here if write-back policy for ST instruction
 				return True
 		return False
 
@@ -156,7 +158,7 @@ class Cache(object):
 
 	def __replace_line(self, tag, index):
 		cache_set = self.__cache[index]
-		#TODO update lower level cache if write-back policy
+		#TODO update lower level cache if write-back policy if ST instruction
 
 		if self.rp_policy == 1:
 			# Random

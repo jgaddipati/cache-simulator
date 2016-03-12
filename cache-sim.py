@@ -6,7 +6,7 @@ Email: jgadd001@ucr.edu
 '''
 import sys
 from cache import Cache
-from trace import Trace
+#from trace import Trace
 
 def main(argv):
 	if len(argv) != 1:
@@ -23,23 +23,26 @@ def main(argv):
 			print "Simulating..."
 
 			for line in trace:
+				# handle empty lines in the trace file
+				if line.strip() == '':
+					continue
+
 				words = line.split() # separate words in the line
+
+				# if using a different trace format, just change the index and L/S format here
+				# to match the Load and Store positions and address positions in the trace
+
+				# current trace format in use:
+				# inst :	1  48d1e2  -1  5  45  - -  L    -264   7fffe7ff048   48d1e9   0    CMP    LOAD
+				# index:    0   1       2  3  4   5 6  7      8        9          10      11   12     13
+
 				if words[7] == 'L':
-					inst_node = {'inst' : 'LD', 'addr' : int(words[9], 16)} # reading in hex
+					inst_node = {'inst' : 'LD', 'addr' : int(words[9], 16)}
 					cache_sim.run(inst_node)
 				elif words[7] == 'S':
-					inst_node = {'inst' : 'ST', 'addr' : int(words[9], 16)} # reading in hex
+					inst_node = {'inst' : 'ST', 'addr' : int(words[9], 16)}
 					cache_sim.run(inst_node)
-			'''
-			for line in trace:
-				words = line.split() # separate words in the line
-				if words[0] == 'LD':
-					inst_node = {'inst' : 'LD', 'addr' : int(words[2], 16)} # reading in hex
-					cache_sim.run(inst_node)
-				elif words[0] == 'ST':
-					inst_node = {'inst' : 'ST', 'addr' : int(words[2], 16)} # reading in hex
-					cache_sim.run(inst_node)
-			'''
+
 	except IOError as error:
 		print '====== ERROR ====='
 		print "Error opening file", error.filename
@@ -47,7 +50,7 @@ def main(argv):
 		sys.exit()
 
 
-	"""
+	""" Deprecated since high memory usage with large traces (can use with small traces)
 	print "Loading trace..."
 	trace_obj = Trace(argv[0])
 
