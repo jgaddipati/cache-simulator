@@ -33,7 +33,7 @@ def main(argv):
 				# to match the Load and Store positions and address positions in the trace
 
 				# current trace format in use:
-				# inst :	1  48d1e2  -1  5  45  - -  L    -264   7fffe7ff048   48d1e9   0    CMP    LOAD
+				# inst :    1  48d1e2  -1  5  45  - -  L    -264   7fffe7ff048   48d1e9   0    CMP    LOAD
 				# index:    0   1       2  3  4   5 6  7      8        9          10      11   12     13
 
 				if words[7] == 'L':
