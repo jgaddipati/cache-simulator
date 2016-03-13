@@ -23,8 +23,8 @@ replace_pol = {'Random' : 1,
 	       'FIFO'   : 3,	# First In First Out
 	       'LFU'    : 4}	# Least Frequently Used
 
-cache_node = {'tag'     : None,	# cache tag
-	      'rp_crit' : 0,	# replacement criteria
+cache_node = {'tag'     : None,	# tag
+	      'rp_crit' : 0,	# replacement criteria, see notes above
 	      'valid'   : 0,	# valid bit
 	      'dirty'   : 0}	# dirty bit for write policy (Write-back or Write-through)
 
@@ -40,6 +40,7 @@ class Cache(object):
 		self.nwrite_accesses = 0
 		self.nread_misses = 0
 		self.nwrite_misses = 0
+		self.cycles = 0
 		self.config_file = filename
 		self.__cache = []
 		self.__read_config()
@@ -125,6 +126,10 @@ class Cache(object):
 		tag = self.__get_tag(addr)
 		index = self.__get_index(addr)
 
+		# finding a tag in the cache, takes "hit time" number of cycles
+		# here assuming hit time = 1 cycle
+		self.cycles += 1
+
 		# check the tags at 'index'th location set
 		# there will be 'assoc' number of tags associated at that index
 		for line in range(self.assoc):
@@ -139,6 +144,11 @@ class Cache(object):
 		tag = self.__get_tag(addr)
 		index = self.__get_index(addr)
 		replace_req = True
+
+		# filling a cache line with memory from lower level cache
+		# takes "miss latency" number of cycles
+		# here assuming miss latency = 100 cycles
+		self.cycles += 100
 
 		# find an empty line at 'index'th location set
 		# there will be 'assoc' number of lines possible
@@ -354,24 +364,28 @@ class Cache(object):
 
 
 	def print_stats(self):
-		hit_time = 1 # (in cycles) can be made configurable through config file
-		miss_latency = 100 # (in cycles)
 
 		n_accesses = self.nwrite_accesses + self.nread_accesses
 		n_misses = self.nwrite_misses + self.nread_misses
 		miss_rate = float(n_misses) / n_accesses
-		amat = hit_time + (miss_rate * miss_latency)
+		amat = float(self.cycles) / n_accesses
 
 		print
 		print "============ Stats ========================="
 		print 'Number of Read Accesses          :', self.nread_accesses
 		print 'Number of Write Accesses         :', self.nwrite_accesses
-		print 'Total Cache Accesses             :', n_accesses
+		print 'Total Memory Accesses            :', n_accesses
+
+		print 'Number of Read Hits              :', self.nread_accesses - self.nread_misses
+		print 'Number of Write Hits             :', self.nwrite_accesses - self.nwrite_misses
+		print 'Total Cache Hits                 :', n_accesses - n_misses
+
 		print 'Number of Read Misses            :', self.nread_misses
 		print 'Number of Write Misses           :', self.nwrite_misses
 		print 'Total Cache Misses               :', n_misses
-		print 'Miss Rate                        :', miss_rate
-		print 'Avg Memory Access Time(cycles)   :', amat
+
+		print 'Miss Rate                        : {:.2f} %'.format(miss_rate * 100)
+		print 'Avg Memory Access Time(cycles)   : {:.2f}'.format(amat)
 		print
 
 
