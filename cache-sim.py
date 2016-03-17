@@ -14,13 +14,13 @@ def main(argv):
 		print "$ python cache-sim.py <trace_file_name>"
 		sys.exit()
 
-	print "Initializing..."
+	print "Initializing Cache..."
 	cache_sim = Cache('config')
 	#cache_sim.print_config()
 
 	try:
 		with open(argv[0], "rb") as trace:
-			print "Simulating..."
+			print "Processing Trace..."
 
 			for line in trace:
 				# handle empty lines in the trace file
