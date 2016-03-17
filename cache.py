@@ -21,7 +21,7 @@ from random import randint
 write_pol = {'WRITE_BACK'    : 1,
              'WRITE_THROUGH' : 2}
 
-replace_pol = {'Random' : 1,
+replace_pol = {'RANDOM' : 1,
 	       'LRU'    : 2,	# Least Recently Used
 	       'FIFO'   : 3,	# First In First Out
 	       'LFU'    : 4}	# Least Frequently Used
@@ -185,20 +185,17 @@ class Cache(object):
 
 	def __replace_line(self, tag, index, inst):
 
-		cache_set = self.__cache[index]
 		self.evictions += 1
-
-		if (inst == 'ST') and (self.wr_policy == 2): # WRITE_THROUGH, write to write_buffer also
-			self.writes_to_wr_buff += 1
-		# else check for dirty blocks during eviction and write those to write buffer
-		# dirty bit will be set only when WRITE_BACK policy
+		cache_set = self.__cache[index]
 
 		if self.rp_policy == 1:
 			# Random
 			random_line = randint(0, self.assoc - 1)
 
-			if (inst == 'ST') and cache_set[random_line]['dirty']:
-				self.writes_to_wr_buff += 1 # WRITE_BACK, write to write buffer
+			# before evicting a block, write to write buffer if it is dirty
+			if self.wr_policy == 1: # WRITE_BACK
+				if cache_set[random_line]['dirty']:
+					self.writes_to_wr_buff += 1
 
 			# now fill with new block
 			cache_set[random_line]['tag'] = tag
@@ -219,8 +216,10 @@ class Cache(object):
 			for line in range(self.assoc):
 				if cache_set[line]['rp_crit'] == lru_crit:
 
-					if (inst == 'ST') and cache_set[line]['dirty']:
-						self.writes_to_wr_buff += 1 # WRITE_BACK, write to write buffer
+					# before evicting a block, write to write buffer if it is dirty
+					if self.wr_policy == 1: # WRITE_BACK
+						if cache_set[line]['dirty']:
+							self.writes_to_wr_buff += 1
 
 					# now fill with new block
 					cache_set[line]['tag'] = tag
@@ -242,8 +241,10 @@ class Cache(object):
 				if cache_set[line]['tag']:
 					if cache_set[line]['rp_crit'] == 0:
 
-						if (inst == 'ST') and cache_set[line]['dirty']:
-							self.writes_to_wr_buff += 1 # WRITE_BACK, write to write buffer
+						# before evicting a block, write to write buffer if it is dirty
+						if self.wr_policy == 1: # WRITE_BACK
+							if cache_set[line]['dirty']:
+								self.writes_to_wr_buff += 1
 
 						# now fill with new block
 						cache_set[line]['tag'] = tag
@@ -265,8 +266,10 @@ class Cache(object):
 			for line in range(self.assoc):
 				if cache_set[line]['rp_crit'] == lfu_crit:
 
-					if (inst == 'ST') and cache_set[line]['dirty']:
-						self.writes_to_wr_buff += 1 # WRITE_BACK, write to write buffer
+					# before evicting a block, write to write buffer if it is dirty
+					if self.wr_policy == 1: # WRITE_BACK
+						if cache_set[line]['dirty']:
+							self.writes_to_wr_buff += 1
 
 					# now fill with new block
 					cache_set[line]['tag'] = tag
@@ -278,6 +281,11 @@ class Cache(object):
 		# TODO add other policies here
 		else:
 			pass
+
+                # added a new line, write to write buffer if it is ST inst
+		if inst == 'ST':
+			if self.wr_policy == 2: # WRITE_THROUGH, write to write buffer
+				self.writes_to_wr_buff += 1
 
 
 	def __init_replace_crit(self, cache_set, line):
