@@ -18,6 +18,9 @@ import sys
 import math
 from random import randint
 
+write_pol = {'WRITE_BACK'    : 1,
+             'WRITE_THROUGH' : 2}
+
 replace_pol = {'Random' : 1,
 	       'LRU'    : 2,	# Least Recently Used
 	       'FIFO'   : 3,	# First In First Out
@@ -35,11 +38,14 @@ class Cache(object):
 		self.cache_size = 0
 		self.assoc = 0
 		self.rp_policy = 0
+		self.wr_policy = 0
 		self.sets = 0
 		self.nread_accesses = 0
 		self.nwrite_accesses = 0
 		self.nread_misses = 0
 		self.nwrite_misses = 0
+		self.evictions = 0
+		self.writes_to_wr_buff = 0
 		self.cycles = 0
 		self.config_file = filename
 		self.__cache = []
@@ -69,6 +75,8 @@ class Cache(object):
 						self.assoc = int(words[2], 0)
 					elif words[0] == 'replacementPolicy':
 						self.rp_policy = replace_pol[words[2]];
+					elif words[0] == 'writePolicy':
+						self.wr_policy = write_pol[words[2]]
 					else:
 						print '====== ERROR ====='
 						print 'Unknown configuration parameter in the config file'
@@ -76,18 +84,19 @@ class Cache(object):
 						print 'Exiting...'
 						sys.exit()
 
-			if self.cache_size and self.block_size and self.assoc and self.rp_policy:
+			if self.cache_size and self.block_size and self.assoc and self.rp_policy and self.wr_policy:
 				self.sets = (self.cache_size / self.block_size) / self.assoc
 			else:
 				print '====== ERROR ====='
 				print 'Not all required parameters in the config file'
-				print 'Required: blockSize, cacheSize, assoc, replacementPolicy'
+				print 'Required: blockSize, cacheSize, assoc, replacementPolicy, writePolicy'
 				print 'Exiting...'
 				sys.exit()
 
 		except IOError as error:
-			print "Error opening file", error.filename
+			print "Error opening", error.filename, "file"
 			print error.message
+			print "Please ensure that 'config' file is present"
 			sys.exit()
 
 
@@ -99,7 +108,6 @@ class Cache(object):
 				for n_lines in range(self.assoc):
 					temp_set.append(cache_node.copy())
 				self.__cache.append(temp_set)
-
 		else:
 			print "Oops! This should not happen"
 			sys.exit()
@@ -111,18 +119,16 @@ class Cache(object):
 		else:
 			self.nwrite_accesses += 1
 
-		if not self.__find_line(addr):
+		if not self.__find_line(addr, inst):
 			if inst == 'LD':
 				self.nread_misses += 1
 			else:
 				self.nwrite_misses += 1
-				#TODO if write-through policy, also write to lower level
-				#TODO if write-back policy, only write to this cache, write to lower level on replace
 
-			self.__fill_line(addr)
+			self.__fill_line(addr, inst)
 
 
-	def __find_line(self, addr):
+	def __find_line(self, addr, inst):
 		tag = self.__get_tag(addr)
 		index = self.__get_index(addr)
 
@@ -131,16 +137,21 @@ class Cache(object):
 		self.cycles += 1
 
 		# check the tags at 'index'th location set
-		# there will be 'assoc' number of tags associated at that index
 		for line in range(self.assoc):
 			if self.__cache[index][line]['valid'] and (self.__cache[index][line]['tag'] == tag):
+
+				if inst == 'ST':
+					if self.wr_policy == 1: # WRITE_BACK, set dirty bit
+						self.__cache[index][line]['dirty'] = 1
+					else: # WRITE_THROUGH, write to write_buffer also
+						self.writes_to_wr_buff += 1
+
 				self.__update_replace_crit(self.__cache[index], line)
-				#TODO set dirty bit here if write-back policy for ST instruction
 				return True
 		return False
 
 
-	def __fill_line(self, addr):
+	def __fill_line(self, addr, inst):
 		tag = self.__get_tag(addr)
 		index = self.__get_index(addr)
 		replace_req = True
@@ -151,30 +162,48 @@ class Cache(object):
 		self.cycles += 100
 
 		# find an empty line at 'index'th location set
-		# there will be 'assoc' number of lines possible
 		for line in range(self.assoc):
 			if self.__cache[index][line]['tag'] == None:
 				replace_req = False
 				self.__cache[index][line]['tag'] = tag
 				self.__cache[index][line]['valid'] = 1
-				# newly added line, set replacement criteria accordingly
+
+				if inst == 'ST':
+					if self.wr_policy == 1: # WRITE_BACK, set dirty bit
+						self.__cache[index][line]['dirty'] = 1
+					else: # WRITE_THROUGH, write to write_buffer also
+						self.writes_to_wr_buff += 1
+
+				# newly added line, init replacement criteria accordingly
 				self.__init_replace_crit(self.__cache[index], line)
 				break
 
 		# all positions are filled, replace a line according to policy
 		if replace_req:
-			self.__replace_line(tag, index)
+			self.__replace_line(tag, index, inst)
 
 
-	def __replace_line(self, tag, index):
+	def __replace_line(self, tag, index, inst):
+
 		cache_set = self.__cache[index]
-		#TODO update lower level cache if write-back policy if ST instruction
+		self.evictions += 1
+
+		if (inst == 'ST') and (self.wr_policy == 2): # WRITE_THROUGH, write to write_buffer also
+			self.writes_to_wr_buff += 1
+		# else check for dirty blocks during eviction and write those to write buffer
+		# dirty bit will be set only when WRITE_BACK policy
 
 		if self.rp_policy == 1:
 			# Random
 			random_line = randint(0, self.assoc - 1)
+
+			if (inst == 'ST') and cache_set[random_line]['dirty']:
+				self.writes_to_wr_buff += 1 # WRITE_BACK, write to write buffer
+
+			# now fill with new block
 			cache_set[random_line]['tag'] = tag
 			cache_set[random_line]['valid'] = 1
+			# init replacement criteria since this is a new tag
 			self.__init_replace_crit(cache_set, random_line)
 
 		elif self.rp_policy == 2:
@@ -189,9 +218,14 @@ class Cache(object):
 			lru_crit = max(lru_cnt)
 			for line in range(self.assoc):
 				if cache_set[line]['rp_crit'] == lru_crit:
+
+					if (inst == 'ST') and cache_set[line]['dirty']:
+						self.writes_to_wr_buff += 1 # WRITE_BACK, write to write buffer
+
+					# now fill with new block
 					cache_set[line]['tag'] = tag
 					cache_set[line]['valid'] = 1
-					# update replacement criteria since this is a new tag
+					# init replacement criteria since this is a new tag
 					self.__init_replace_crit(cache_set, line)
 					break
 
@@ -207,9 +241,14 @@ class Cache(object):
 			for line in range(self.assoc):
 				if cache_set[line]['tag']:
 					if cache_set[line]['rp_crit'] == 0:
+
+						if (inst == 'ST') and cache_set[line]['dirty']:
+							self.writes_to_wr_buff += 1 # WRITE_BACK, write to write buffer
+
+						# now fill with new block
 						cache_set[line]['tag'] = tag
 						cache_set[line]['valid'] = 1
-						# update replacement criteria since this is a new tag
+						# init replacement criteria since this is a new tag
 						self.__init_replace_crit(cache_set, line)
 						break
 
@@ -225,9 +264,14 @@ class Cache(object):
 			lfu_crit = min(access_cnt)
 			for line in range(self.assoc):
 				if cache_set[line]['rp_crit'] == lfu_crit:
+
+					if (inst == 'ST') and cache_set[line]['dirty']:
+						self.writes_to_wr_buff += 1 # WRITE_BACK, write to write buffer
+
+					# now fill with new block
 					cache_set[line]['tag'] = tag
 					cache_set[line]['valid'] = 1
-					# update replacement criteria since this is a new tag
+					# init replacement criteria since this is a new tag
 					self.__init_replace_crit(cache_set, line)
 					break
 
@@ -387,6 +431,9 @@ class Cache(object):
 		print 'Number of Write Misses           :', self.nwrite_misses
 		print
 
+		print 'Cache Block Evictions            :', self.evictions
+		print 'Number of writes to WriteBuffer  :', self.writes_to_wr_buff
+		print
 
 		print 'Miss Rate                        : {:.2f} %'.format(miss_rate * 100)
 		print 'Avg Memory Access Time(cycles)   : {:.2f}'.format(amat)
@@ -400,4 +447,5 @@ class Cache(object):
 		print 'Block size           :', self.block_size
 		print 'Associativity        :', self.assoc
 		print 'Replacement criteria :', [key for key, value in replace_pol.iteritems() if value == self.rp_policy]
+		print 'Write Policy         :', [key for key, value in write_pol.iteritems() if value == self.wr_policy]
 		print

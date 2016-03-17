@@ -1,4 +1,5 @@
 blockSize           = 64
-cacheSize           = 65536	#cannot take as 64*1024, have to give calculated value for now
+cacheSize           = 65536		#cannot take as 64*1024, have to give calculated value for now
 assoc               = 4
-replacementPolicy   = Random 	#LRU,FIFO,Random,LFU
+replacementPolicy   = LRU		#LRU,FIFO,Random,LFU
+writePolicy         = WRITE_BACK	#WRITE_BACK, WRITE_THROUGH

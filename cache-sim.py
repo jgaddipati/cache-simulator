@@ -4,6 +4,7 @@
 Author: Jagadeesh Gaddipati
 Email: jgadd001@ucr.edu
 '''
+
 import sys
 from cache import Cache
 #from trace import Trace
@@ -16,11 +17,11 @@ def main(argv):
 
 	print "Initializing Cache..."
 	cache_sim = Cache('config')
-	#cache_sim.print_config()
+	cache_sim.print_config()
 
 	try:
 		with open(argv[0], "rb") as trace:
-			print "Processing Trace..."
+			print "Processing Instruction Trace..."
 
 			for line in trace:
 				# handle empty lines in the trace file
@@ -37,10 +38,10 @@ def main(argv):
 				# index:    0   1       2  3  4   5 6  7      8        9          10      11   12     13
 
 				if words[7] == 'L':
-					inst_node = {'inst' : 'LD', 'addr' : int(words[9], 16)}
+					inst_node = {'inst' : 'LD', 'addr' : int(words[9], 16)} # address is in hex, read in base 16
 					cache_sim.run(inst_node)
 				elif words[7] == 'S':
-					inst_node = {'inst' : 'ST', 'addr' : int(words[9], 16)}
+					inst_node = {'inst' : 'ST', 'addr' : int(words[9], 16)} # address is in hex, read in base 16
 					cache_sim.run(inst_node)
 
 	except IOError as error:
