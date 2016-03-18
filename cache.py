@@ -137,16 +137,13 @@ class Cache(object):
 		self.cycles += 1
 
 		# check the tags at 'index'th location set
+		cache_set = self.__cache[index]
+
 		for line in range(self.assoc):
-			if self.__cache[index][line]['valid'] and (self.__cache[index][line]['tag'] == tag):
-
+			if cache_set[line]['valid'] and (cache_set[line]['tag'] == tag):
 				if inst == 'ST':
-					if self.wr_policy == 1: # WRITE_BACK, set dirty bit
-						self.__cache[index][line]['dirty'] = 1
-					else: # WRITE_THROUGH, write to write_buffer also
-						self.writes_to_wr_buff += 1
-
-				self.__update_replace_crit(self.__cache[index], line)
+					self.__act_write_policy(cache_set[line])
+				self.__update_replace_crit(cache_set, line)
 				return True
 		return False
 
@@ -162,20 +159,18 @@ class Cache(object):
 		self.cycles += 100
 
 		# find an empty line at 'index'th location set
-		for line in range(self.assoc):
-			if self.__cache[index][line]['tag'] == None:
-				replace_req = False
-				self.__cache[index][line]['tag'] = tag
-				self.__cache[index][line]['valid'] = 1
+		cache_set = self.__cache[index]
 
+		for line in range(self.assoc):
+			if cache_set[line]['tag'] == None:
+				replace_req = False
+				cache_set[line]['tag'] = tag
+				cache_set[line]['valid'] = 1
 				if inst == 'ST':
-					if self.wr_policy == 1: # WRITE_BACK, set dirty bit
-						self.__cache[index][line]['dirty'] = 1
-					else: # WRITE_THROUGH, write to write_buffer also
-						self.writes_to_wr_buff += 1
+					self.__act_write_policy(cache_set[line])
 
 				# newly added line, init replacement criteria accordingly
-				self.__init_replace_crit(self.__cache[index], line)
+				self.__init_replace_crit(cache_set, line)
 				break
 
 		# all positions are filled, replace a line according to policy
@@ -200,6 +195,9 @@ class Cache(object):
 			# now fill with new block
 			cache_set[random_line]['tag'] = tag
 			cache_set[random_line]['valid'] = 1
+			if inst == 'ST':
+				self.__act_write_policy(cache_set[random_line])
+
 			# init replacement criteria since this is a new tag
 			self.__init_replace_crit(cache_set, random_line)
 
@@ -224,6 +222,9 @@ class Cache(object):
 					# now fill with new block
 					cache_set[line]['tag'] = tag
 					cache_set[line]['valid'] = 1
+					if inst == 'ST':
+						self.__act_write_policy(cache_set[line])
+
 					# init replacement criteria since this is a new tag
 					self.__init_replace_crit(cache_set, line)
 					break
@@ -249,6 +250,9 @@ class Cache(object):
 						# now fill with new block
 						cache_set[line]['tag'] = tag
 						cache_set[line]['valid'] = 1
+						if inst == 'ST':
+							self.__act_write_policy(cache_set[line])
+
 						# init replacement criteria since this is a new tag
 						self.__init_replace_crit(cache_set, line)
 						break
@@ -274,6 +278,9 @@ class Cache(object):
 					# now fill with new block
 					cache_set[line]['tag'] = tag
 					cache_set[line]['valid'] = 1
+					if inst == 'ST':
+						self.__act_write_policy(cache_set[line])
+
 					# init replacement criteria since this is a new tag
 					self.__init_replace_crit(cache_set, line)
 					break
@@ -281,11 +288,6 @@ class Cache(object):
 		# TODO add other policies here
 		else:
 			pass
-
-                # added a new line, write to write buffer if it is ST inst
-		if inst == 'ST':
-			if self.wr_policy == 2: # WRITE_THROUGH, write to write buffer
-				self.writes_to_wr_buff += 1
 
 
 	def __init_replace_crit(self, cache_set, line):
@@ -361,6 +363,13 @@ class Cache(object):
 		# TODO add other policies here
 		else:
 			pass
+
+
+	def __act_write_policy(self, cache_line):
+		if self.wr_policy == 1:
+			cache_line['dirty'] = 1 # WRITE_BACK, set dirty bit
+		else:
+			self.writes_to_wr_buff += 1 # WRITE_THROUGH, write to write_buffer also
 
 
 	def __get_tag(self, addr):

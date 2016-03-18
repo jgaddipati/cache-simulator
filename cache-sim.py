@@ -22,8 +22,16 @@ def main(argv):
 	try:
 		with open(argv[0], "rb") as trace:
 			print "Processing Instruction Trace..."
+			i = 0.0
 
 			for line in trace:
+
+				# Poor man's solution to indicate application is still running
+				i += 1
+				if (i % 10**5 == 0):
+					sys.stdout.write('.')
+					sys.stdout.flush()
+
 				# handle empty lines in the trace file
 				if line.strip() == '':
 					continue
