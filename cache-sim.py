@@ -51,6 +51,8 @@ def main(argv):
 				elif words[7] == 'S':
 					inst_node = {'inst' : 'ST', 'addr' : int(words[9], 16)} # address is in hex, read in base 16
 					cache_sim.run(inst_node)
+				else:
+					pass
 
 	except IOError as error:
 		print '====== ERROR ====='

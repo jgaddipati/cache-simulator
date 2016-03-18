@@ -132,18 +132,17 @@ class Cache(object):
 		tag = self.__get_tag(addr)
 		index = self.__get_index(addr)
 
-		# to find if a tag is in the cache, takes "hit time" number of cycles
-		# here assuming hit time = 1 cycle
-		self.cycles += 1
-
 		# check the tags at 'index'th location set
 		cache_set = self.__cache[index]
 
 		for line in range(self.assoc):
 			if cache_set[line]['valid'] and (cache_set[line]['tag'] == tag):
+
+				# takes 1 cycle to send data to processor on hit
+				self.cycles += 1
+				self.__update_replace_crit(cache_set, line)
 				if inst == 'ST':
 					self.__act_write_policy(cache_set[line])
-				self.__update_replace_crit(cache_set, line)
 				return True
 		return False
 
@@ -153,9 +152,8 @@ class Cache(object):
 		index = self.__get_index(addr)
 		replace_req = True
 
-		# filling a cache line with memory from lower level cache
-		# takes "miss latency" number of cycles
-		# here assuming miss latency = 100 cycles
+		# filling a cache line with memory from
+		# lower level cache takes 100 cycles
 		self.cycles += 100
 
 		# find an empty line at 'index'th location set
@@ -176,6 +174,9 @@ class Cache(object):
 		# all positions are filled, replace a line according to policy
 		if replace_req:
 			self.__replace_line(tag, index, inst)
+
+		# takes additional 1 cycle to send filled data to processor on miss
+		self.cycles += 1
 
 
 	def __replace_line(self, tag, index, inst):
